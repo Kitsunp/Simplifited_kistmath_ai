@@ -36,7 +36,7 @@ from src.models.external_memory import ExternalMemory
 from src.models.math_problem import MathProblem
 from src.models.kistmat_ai import Kistmat_AI
 from src.models.symbolic_reasoner import SymbolicReasoner
-from src.utils import tokenize_problem, tokenize_calculus_problem, generate_dataset, evaluate_readiness, train_model, plot_learning_curves, evaluate_model, test_knowledge_transfer, test_symbolic_consistency, test_long_term_memory, test_concept_generalization, smooth_curriculum_learning
+from src.utils import tokenize_problem, tokenize_calculus_problem, generate_dataset, evaluate_readiness, train_model, plot_learning_curves, evaluate_model , smooth_curriculum_learning
 
 def main():
     print("Initializing Kistmat_AI model...")
