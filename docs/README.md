@@ -21,9 +21,9 @@ python src/main.py
 ```
 
 ## Documentation
-- [Symbolic Reasoning](docs/symbolic_reasoning.md)
-- [Proximal Policy Optimization (PPO)](docs/ppo.md)
-- [Memory Systems](docs/memory_systems.md)
+- [Symbolic Reasoning](symbolic_reasoning.md)
+- [Proximal Policy Optimization (PPO)](ppo.md)
+- [Memory Systems](memory_systems.md)
 
 ## Folder Structure
 The project is organized as follows:
