@@ -3,7 +3,7 @@ from tensorflow import keras
 from keras.layers import Embedding, Bidirectional, LSTM, BatchNormalization, Dropout, MultiHeadAttention, Dense
 from keras.regularizers import l2
 from keras.utils import register_keras_serializable
-from src.models.external_memory import ExternalMemory
+from src.models.memory_system import MemorySystem
 from src.models.math_problem import MathProblem
 
 VOCAB_SIZE = 1000
@@ -26,12 +26,11 @@ class Kistmat_AI(keras.Model):
         self.dropout = Dropout(0.5)
         self.attention = MultiHeadAttention(num_heads=8, key_dim=32)
 
-        self.memory = ExternalMemory(key_size=64, value_size=128)
+        self.memory = MemorySystem()
         self.memory_query = Dense(64, dtype='float32')
 
         self.reasoning_layer = Dense(512, activation='relu', kernel_regularizer=l2(0.01))
         self.batch_norm3 = BatchNormalization()
-
         # Output layers for different learning stages
         self.output_layers = {
             'elementary1': Dense(128, activation='linear'),

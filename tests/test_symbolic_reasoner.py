@@ -24,6 +24,12 @@ class TestSymbolicReasoner(unittest.TestCase):
         expression = sp.Symbol('x') + 1
         result = self.reasoner.apply_rules(expression)
         self.assertEqual(result, sp.Symbol('y'))
+        self.reasoner.add_symbol('y')
+        rule = (sp.Symbol('x') + 1, sp.Symbol('y'))
+        self.reasoner.add_rule(rule)
+        expression = sp.Symbol('x') + 1
+        result = self.reasoner.apply_rules(expression)
+        self.assertEqual(result, sp.Symbol('y'))
 
     def test_simplify(self):
         expression = sp.sin(sp.Symbol('x'))**2 + sp.cos(sp.Symbol('x'))**2

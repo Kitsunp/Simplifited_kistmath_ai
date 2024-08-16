@@ -21,3 +21,10 @@ class SymbolicReasoner:
 
     def symbolic_loss(self, predicted, actual):
         return tf.reduce_mean(tf.square(predicted - actual))
+
+    def expand_rules_and_symbols(self):
+        # Example of expanding rules and symbols
+        self.add_symbol('y')
+        self.add_rule(('y + 0', 'y'))
+        self.add_rule(('y * 1', 'y'))
+        self.add_rule(('y * 0', '0'))
