@@ -1,46 +1,12 @@
-import numpy as np
 import os
+import numpy as np
 import tensorflow as tf
-
-# Configuración de TensorFlow
-os.environ['TF_NUM_INTEROP_THREADS'] = str(os.cpu_count())
-os.environ['TF_NUM_INTRAOP_THREADS'] = str(os.cpu_count())
-os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
-
-import keras
-from tensorflow import keras
-import sympy as sp
-from sklearn.model_selection import KFold
-from sklearn.metrics import mean_squared_error, r2_score
-import matplotlib.pyplot as plt
-import time
-import io
-from keras import ops
-from tensorflow.keras.utils import register_keras_serializable
-from matplotlib.backends.backend_agg import FigureCanvasAgg
-import warnings
-warnings.filterwarnings("ignore", category=UserWarning, module="keras.src.ops.nn")
-
-# Habilitar ejecución ansiosa
-tf.config.run_functions_eagerly(True)
-
-# Habilitar modo de depuración para tf.data
-tf.data.experimental.enable_debug_mode()
-
-# Constantes
-VOCAB_SIZE = 1000
-MAX_LENGTH = 50
-MAX_TERMS = 50
-
-from src.models.external_memory import ExternalMemory
-from src.models.math_problem import MathProblem
 from src.models.kistmat_ai import Kistmat_AI
-from src.models.symbolic_reasoner import SymbolicReasoner
-from src.utils import tokenize_problem, tokenize_calculus_problem, generate_dataset, evaluate_readiness, train_model, plot_learning_curves, evaluate_model, test_knowledge_transfer, test_symbolic_consistency, test_long_term_memory, test_concept_generalization, smooth_curriculum_learning
+from src.utils.utils import generate_dataset, evaluate_model, plot_learning_curves, smooth_curriculum_learning
 
 def main():
     print("Initializing Kistmat_AI model...")
-    model = Kistmat_AI(input_shape=(MAX_LENGTH,), output_shape=2)
+    model = Kistmat_AI(input_shape=(50,), output_shape=2)
 
     stages = ['elementary1', 'elementary2', 'elementary3', 'junior_high1', 'junior_high2',
               'high_school1', 'high_school2', 'high_school3', 'university']
