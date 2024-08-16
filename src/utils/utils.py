@@ -2,6 +2,8 @@ import numpy as np
 import tensorflow as tf
 from sklearn.metrics import r2_score
 from src.models.math_problem import MathProblem
+import matplotlib.pyplot as plt
+import os
 
 VOCAB_SIZE = 1000
 MAX_LENGTH = 50
@@ -175,3 +177,225 @@ def evaluate_model(model, problems, stage):
         r2 = r2_score(y, predictions)
 
     return mse, r2
+import os
+import tempfile
+
+def train_model(model, problems, epochs=10):
+    optimizer = tf.keras.optimizers.Adam(learning_rate=0.001, clipnorm=1.0)
+    model.compile(optimizer=optimizer, loss='mse', metrics=['mae'])
+
+    if model.get_learning_stage() == 'university':
+        X_train = np.array([tokenize_calculus_problem(p.problem) for p in problems])
+        y_train = np.array([p.solution for p in problems])
+        if y_train.ndim == 1:
+            y_train = np.column_stack((y_train, np.zeros_like(y_train)))
+    else:
+        X_train = np.array([tokenize_problem(p.problem) for p in problems])
+        y_train_real = np.array([p.solution.real for p in problems])
+        y_train_imag = np.array([p.solution.imag for p in problems])
+        y_train = np.column_stack((y_train_real, y_train_imag))
+
+    early_stopping = tf.keras.callbacks.EarlyStopping(
+        monitor='val_loss', patience=5, restore_best_weights=True
+    )
+
+    # Use a temporary directory to save the model
+    temp_dir = tempfile.gettempdir()
+    model_path = os.path.join(temp_dir, 'best_model.keras')
+    
+    model_checkpoint = tf.keras.callbacks.ModelCheckpoint(
+        model_path, monitor='val_loss', save_best_only=True, mode='min', verbose=1
+    )
+    
+    lr_scheduler = tf.keras.callbacks.ReduceLROnPlateau(
+        monitor='val_loss', factor=0.5, patience=3, min_lr=1e-6, verbose=1
+    )
+
+    try:
+        history = model.fit(
+            X_train, y_train,
+            epochs=epochs,
+            batch_size=64,
+            validation_split=0.2,
+            verbose=1,
+            callbacks=[early_stopping, model_checkpoint, lr_scheduler]
+        )
+        print(f"Model saved successfully to {model_path}")
+    except Exception as e:
+        print(f"An error occurred while training or saving the model: {str(e)}")
+        print(f"Attempted to save model to: {model_path}")
+        print(f"Current working directory: {os.getcwd()}")
+        print(f"User home directory: {os.path.expanduser('~')}")
+        raise
+
+    return history
+
+def plot_learning_curves(stage_history, stage_name):
+    plt.figure(figsize=(10, 6))
+    history = stage_history['history']
+
+    if isinstance(history, list):
+        for i, h in enumerate(history):
+            losses = h.history['loss']
+            val_losses = h.history.get('val_loss', [])
+            epochs = range(1, len(losses) + 1)
+            plt.plot(epochs, losses, label=f'Training Loss (Session {i+1})')
+            if val_losses:
+                plt.plot(epochs, val_losses, label=f'Validation Loss (Session {i+1})')
+    else:
+        losses = history.history['loss']
+        val_losses = history.history.get('val_loss', [])
+        epochs = range(1, len(losses) + 1)
+        plt.plot(epochs, losses, label='Training Loss')
+        if val_losses:
+            plt.plot(epochs, val_losses, label='Validation Loss')
+
+    plt.title(f'Learning Curves - {stage_name}')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+
+    os.makedirs('output', exist_ok=True)
+    figure_path = os.path.join('output', f'learning_curves_{stage_name}.png')
+    plt.savefig(figure_path)
+    plt.close()
+
+    print(f"Learning curves for {stage_name} saved to {figure_path}")
+
+def smooth_curriculum_learning(model, stages, initial_problems=1000, max_problems=2000,
+                               initial_difficulty=0.2, max_difficulty=5.0,
+                               difficulty_increase_rate=0.5, difficulty_decrease_rate=0.2,
+                               readiness_threshold=0.8, max_attempts_per_stage=5):
+    all_history = []
+    current_difficulty = initial_difficulty
+    evaluation_results = {}
+
+    readiness_thresholds = {
+        'elementary1': 0.95, 'elementary2': 0.93, 'elementary3': 0.91,
+        'junior_high1': 0.89, 'junior_high2': 0.87,
+        'high_school1': 0.85, 'high_school2': 0.83, 'high_school3': 0.81,
+        'university': 0.80
+    }
+
+    for stage in stages:
+        print(f"\n{'='*50}\nEntering learning stage: {stage}\n{'='*50}")
+        model.set_learning_stage(stage)
+
+        problems_solved = 0
+        stage_history = []
+        attempts = 0
+        consecutive_improvements = 0
+
+        while problems_solved < max_problems and attempts < max_attempts_per_stage:
+            num_problems = min(initial_problems, max_problems - problems_solved)
+            print(f"\nGenerating {num_problems} problems with difficulty {current_difficulty:.2f}")
+            problems = generate_dataset(num_problems, stage, current_difficulty)
+
+            print(f"Training on {len(problems)} problems...")
+            history = train_model(model, problems, epochs=20)
+            stage_history.append(history)
+
+            val_problems = problems[-len(problems)//5:]  # Use last 20% as validation
+            print("Evaluating model on validation set...")
+            readiness_score = evaluate_readiness(model, val_problems, readiness_thresholds[stage])
+
+            print(f"Current difficulty: {current_difficulty:.2f}, Readiness score: {readiness_score:.4f}")
+
+            if readiness_score > readiness_thresholds[stage]:
+                consecutive_improvements += 1
+                current_difficulty = min(current_difficulty + difficulty_increase_rate, max_difficulty)
+                print(f"Increasing difficulty. New difficulty: {current_difficulty:.2f}")
+
+                if consecutive_improvements >= 3:
+                    print(f"Model consistently improving. Moving to next stage.")
+                    break
+            else:
+                consecutive_improvements = 0
+                current_difficulty = max(current_difficulty * (1 - difficulty_decrease_rate), initial_difficulty)
+                print(f"Decreasing difficulty. New difficulty: {current_difficulty:.2f}")
+                attempts += 1
+
+            problems_solved += num_problems
+
+        if attempts == max_attempts_per_stage:
+            print(f"Max attempts reached for {stage}. Moving to next stage.")
+
+        model.save(f'model_{stage}.keras')
+
+        stage_data = {
+            'stage': stage,
+            'history': stage_history,
+            'final_difficulty': current_difficulty
+        }
+        all_history.append(stage_data)
+
+        plot_learning_curves(stage_data, stage)
+
+        print("\nRunning additional tests...")
+        transfer_ratio = test_knowledge_transfer(model, stages[max(0, stages.index(stage)-1)], stage)
+        consistency_score = test_symbolic_consistency(model)
+        memory_score = test_long_term_memory(model, [stage])[stage]
+        generalization_score = test_concept_generalization(model, stage)
+
+        evaluation_results[stage] = {
+            'readiness_score': readiness_score,
+            'transfer_ratio': transfer_ratio,
+            'consistency_score': consistency_score,
+            'memory_score': memory_score,
+            'generalization_score': generalization_score,
+        }
+
+        print(f"\nStage {stage} completed.")
+        print(f"Final Readiness Score: {readiness_score:.4f}")
+        print(f"Transfer Ratio: {transfer_ratio:.4f}")
+        print(f"Consistency Score: {consistency_score:.4f}")
+        print(f"Memory Score: {memory_score:.4f}")
+        print(f"Generalization Score: {generalization_score:.4f}")
+
+    return all_history, evaluation_results
+
+# Funciones adicionales necesarias para smooth_curriculum_learning
+def test_knowledge_transfer(model, source_stage, target_stage, num_problems=100):
+    source_problems = generate_dataset(num_problems, source_stage, difficulty=1.5)
+    target_problems = generate_dataset(num_problems, target_stage, difficulty=1.5)
+
+    source_mse, _ = evaluate_model(model, source_problems, source_stage)
+    target_mse, _ = evaluate_model(model, target_problems, target_stage)
+
+    return source_mse / target_mse if target_mse != 0 else float('inf')
+
+def test_symbolic_consistency(model, num_problems=100):
+    def generate_equivalent_problems():
+        a, b = np.random.randint(1, 20, size=2)
+        return [f"{a} + {b}", f"{b} + {a}", f"{a+b}"]
+
+    consistent_count = 0
+    for _ in range(num_problems):
+        problems = generate_equivalent_problems()
+        tokenized_problems = [tokenize_problem(p) for p in problems]
+        predictions = model.predict(np.array(tokenized_problems))
+        if np.allclose(predictions, predictions[0], atol=1e-5):
+            consistent_count += 1
+
+    return consistent_count / num_problems
+
+def test_long_term_memory(model, stages, num_problems=50):
+    memory_scores = {}
+    for stage in stages:
+        model.set_learning_stage(stage)
+        problems = generate_dataset(num_problems, stage, difficulty=1.5)
+        mse1, _ = evaluate_model(model, problems, stage)
+        mse2, _ = evaluate_model(model, problems, stage)
+        memory_scores[stage] = (mse1 - mse2) / mse1 if mse1 != 0 else 0
+    return memory_scores
+
+def test_concept_generalization(model, stage, num_problems=100):
+    standard_problems = generate_dataset(num_problems, stage, difficulty=1.5)
+    complex_problems = generate_dataset(num_problems, stage, difficulty=3.0)
+
+    standard_mse, _ = evaluate_model(model, standard_problems, stage)
+    complex_mse, _ = evaluate_model(model, complex_problems, stage)
+
+    return standard_mse / complex_mse if complex_mse != 0 else float('inf')
